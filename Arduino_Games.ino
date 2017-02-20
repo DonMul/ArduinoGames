@@ -17,22 +17,39 @@
 // GAME DEFINES
 #define GAME_UNSET 0
 #define GAME_FOXHUNT 1
+#define GAME_LIVING_STRATEGO 2
 
 // ROLE DEFINES
 #define ROLE_FOXHUNT_HUNTER 0
 #define ROLE_FOXHUNT_FOX 1
 
+#define ROLE_LS_BOMB 0
+#define ROLE_LS_SPY 1
+#define ROLE_LS_SCOUT 2
+#define ROLE_LS_MINER 3
+#define ROLE_LS_SERGEANT 4
+#define ROLE_LS_LIEUTENANT 5
+#define ROLE_LS_CAPTAIN 6
+#define ROLE_LS_MAJOR 7
+#define ROLE_LS_COLONEL 8
+#define ROLE_LS_GENERAL 9
+#define ROLE_LS_MARSHALL 10
+
 // GAME AND ROLE VARIABLES
 int game = GAME_UNSET;
 int role = 0;
+int team = 0;
 
 // WIFI SETTINGS
 const char *foxHuntSSID = "FHAP";
 const char *foxHuntPassword = "Fh!1";
 int connections = 0;
 
-WiFiEventHandler onConnectHandler;
-WiFiEventHandler onDisconnetHandler;
+WiFiEventHandler stationConnectedHandler;
+WiFiEventHandler stationDisconnectedHandler;
+
+// RFID SETTINGS
+MFRC522 mfrc522(SS_PIN, RST_PIN);
 
 /**
  * Setup leds and initialises the MFRC522 module
@@ -70,6 +87,46 @@ void loop() {
 
       delay(500);
     }
+  } else if (game == GAME_LIVING_STRATEGO) {
+    if (!mfrc522.PICC_IsNewCardPresent()) {
+      delay(50);
+      return;
+    }
+    
+    if (!mfrc522.PICC_ReadCardSerial()) {
+      delay(50);
+      return;
+    }
+
+    int opponentGame = mfrc522.uid.uidByte[0];
+    int opponentRole = mfrc522.uid.uidByte[1];
+    int opponentTeam = mfrc522.uid.uidByte[2];
+
+    if (opponentGame != game) {
+      return;
+    }
+
+    if (opponentTeam == team) {
+      teamLedBlink(5);
+      return;
+    }
+
+    bool gameOver = false;
+    if (opponentRole == ROLE_LS_BOMB && role != ROLE_LS_MINER) {
+      gameOver = true;
+    } else if (opponentRole == ROLE_LS_MARSHALL && role != ROLE_LS_SPY) {
+      gameOver = true;
+    } else if (opponentRole > role) {
+      gameOver = true;
+    }
+
+    if (gameOver == true) {
+      setLeds(0,0,0);
+      game = 0;
+      return;
+    } else {
+      teamLedBlink(5);
+    }
   }
 }
 
@@ -96,16 +153,23 @@ void initGame() {
     delay(50);
     return;
   }
-
-  if (mfcr522.uid.uiByte[0] == GAME_FOXHUNT) {
+  
+  int gameByte = mfrc522.uid.uidByte[0];
+  if (gameByte == GAME_FOXHUNT) {
     game = GAME_FOXHUNT;
-    role = mfcr522.uidByte[1];
+    role = mfrc522.uid.uidByte[1];
     
     if (role != ROLE_FOXHUNT_HUNTER && role != ROLE_FOXHUNT_FOX) {
       role = ROLE_FOXHUNT_HUNTER;
     }
 
     initFoxHunt();
+  } else if (gameByte == GAME_LIVING_STRATEGO) {
+    game = GAME_LIVING_STRATEGO;
+    role = mfrc522.uid.uidByte[1];
+    team = mfrc522.uid.uidByte[2];
+
+    initLS();
   }
 }
 
@@ -117,7 +181,7 @@ void initFoxHunt() {
   if (role == ROLE_FOXHUNT_FOX) {
     // Enable the WiFi AP
     WiFi.mode(WIFI_AP);
-    WiFi.softAp(fodHuntSSID, foxHuntPassword);
+    WiFi.softAP(foxHuntSSID, foxHuntPassword);
 
     // Clear leds to "Safe" (Green)
     setLeds(0,1,0);
@@ -125,7 +189,7 @@ void initFoxHunt() {
 
     // Set wifi connection listeners
     stationConnectedHandler = WiFi.onSoftAPModeStationConnected(&onWifiConnect);
-    stationDisconnectedHandler = WiFi.onSoftAPModeStationDisconnected(&onStationDisconnected);
+    stationDisconnectedHandler = WiFi.onSoftAPModeStationDisconnected(&onWifiDisconnect);
   }
   // If the role is a HUNTER
   else if (role == ROLE_FOXHUNT_HUNTER) {
@@ -135,6 +199,42 @@ void initFoxHunt() {
   }
   
   delay(500);
+}
+
+/**
+ * Initializes Living Stratego
+ */
+void initLS() {
+  initTeamLeds();
+}
+
+/**
+ * Ensures the correct team collors
+ */
+void initTeamLeds()
+{
+  if (team == 0) {
+    setLeds(1,0,0);
+  } else if (team == 1) {
+    setLeds(0,1,0);
+  } else if (team == 2) {
+    setLeds(0,0,1);
+  } else if (team == 4) {
+    setLeds(1,1,0);
+  }
+}
+
+/**
+ * Blinks an given amount of times
+ */
+void teamLedBlink(int amount)
+{
+  for (int i = 0; i < amount; i++) {
+    setLeds(0,0,0);
+    delay(100);
+    initTeamLeds();
+    delay(100);
+  }
 }
 
 /**
