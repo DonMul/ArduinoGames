@@ -17,3 +17,10 @@ See https://github.com/Jorgen-VikingGod/ESP8266-MFRC522/blob/master/MFRC522-ESP8
 
 ## Current implemented games:
 * FoxHunt
+* Living Stratego
+
+## Compile info
+```
+Sketch uses 232017 bytes (53%) of program storage space. Maximum is 434160 bytes.
+Global variables use 31960 bytes (39%) of dynamic memory, leaving 49960 bytes for local variables. Maximum is 81920 bytes.
+```
